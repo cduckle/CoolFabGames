@@ -460,14 +460,26 @@ if (editingMask) {
 }
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', background: '#f0f0f0' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 200px', width: '80%', height: '80%', maxWidth: 1200, maxHeight: 800, background: '#fff', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+      <div style={{ display: 'grid', gridTemplateRows: '1fr 2fr', gridTemplateColumns: '1fr 2fr 200px', width: '80%', height: '80%', maxWidth: 1200, maxHeight: 800, background: '#fff', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
         
-        {/* 2D Cross-Section */}
-        <div style={{ gridColumn: '1/2', padding: 0, width: '100%', height: '100%' }}>
-          <CrossSection layers={layers} substrateHeight={substrateHeight} maskRects={maskRects} />
+        <div style={{ gridRow: '1/2', gridColumn: '1/2', padding: 0, background: '#f4f4f4', width: '100%', height: '100%' }}>
+        <h3 style={{paddingLeft: 10}}>MOSFET</h3>
+        <p style={{paddingLeft: 10}}>Metal-Oxide Semiconductor Field Effect Transistor</p>
+        <p style={{paddingLeft: 10}}>Modern chips have billions of these small electronic switches that controls the flow of electricity</p>
+        </div>
+        {/* 3D Goal */}
+        <div style={{ gridRow: '2/3', gridColumn: '1/2', background: '#f4f4f4', padding: 0, width: '100%', height: '100%' }}>
+          <Canvas style={{ width: '100%', height: '100%' }} camera={{ position: [6,10,20], fov: 45 }}>
+            <ambientLight intensity={0.5} />
+            <directionalLight position={[5,10,7]} intensity={1} />
+            {/* substrate */}
+            <mesh position={[0, substrateHeight/2, 0]}> <boxGeometry args={[5,substrateHeight,5]} /> <meshStandardMaterial color="#c0c0c0" /> </mesh>
+            
+            <OrbitControls />
+          </Canvas>
         </div>
         {/* 3D View */}
-        <div style={{ gridColumn: '2/4', width: '100%', height: '100%' }}>
+        <div style={{ gridRow: '1/3', gridColumn: '2/3', width: '100%', height: '100%' }}>
           <Canvas style={{ width: '100%', height: '100%' }} camera={{ position: [3,5,10], fov: 45 }}>
             <ambientLight intensity={0.5} />
             <directionalLight position={[5,10,7]} intensity={1} />
@@ -500,7 +512,7 @@ if (editingMask) {
           </Canvas>
         </div>
         {/* Controls */}
-        <div style={{ gridColumn: '4/5', padding: 20, background: '#f4f4f4', display:'flex',flexDirection:'column',justifyContent:'center' }}>
+        <div style={{ gridRow: '1/3', gridColumn: '3/4', padding: 20, background: '#f4f4f4', display:'flex',flexDirection:'column',justifyContent:'center' }}>
           <button onClick={handleDeposit_Cu} style={{marginBottom:10}}>Deposit Cu</button>
           <button onClick={handleDeposit_SiO2} style={{marginBottom:10}}>Deposit SiO2</button>
           <button onClick={handleDeposit_aSi} style={{marginBottom:10}}>Deposit aSi</button>
