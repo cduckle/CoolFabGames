@@ -1,11 +1,133 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, Edges } from '@react-three/drei';
 import * as THREE from 'three';
 import { mask, pattern } from 'framer-motion/client';
+import { MOSFET_GOAL_RECTS } from './mosfetGoal.js';
+
+// Level definitions
+const LEVELS = {
+  mosfet: {
+    name: 'MOSFET',
+    description: 'Metal-Oxide Semiconductor Field Effect Transistor',
+    details: 'Modern chips have billions of these small electronic switches.',
+    goalRects: MOSFET_GOAL_RECTS
+  },
+  waveguide: {
+    name: 'Waveguide',
+    description: 'Optical Waveguide',
+    details: 'Guides light through a narrow channel for photonic circuits.',
+    goalRects: [
+      // Simple straight waveguide
+      { x: 0.2, y: 0.45, w: 0.6, h: 0.1, l: 1, color: '#8ac6d1' },
+      { x: 0.2, y: 0.45, w: 0.6, h: 0.1, l: 2, color: '#f6d186' }
+    ]
+  },
+  spiral: {
+    name: 'Spiral Waveguide',
+    description: 'Spiral Optical Waveguide',
+    details: 'A compact spiral design for delay lines and filters.',
+    goalRects: [
+      // Spiral pattern
+      { x: 0.3, y: 0.3, w: 0.4, h: 0.05, l: 1, color: '#8ac6d1' },
+      { x: 0.3, y: 0.65, w: 0.4, h: 0.05, l: 1, color: '#8ac6d1' },
+      { x: 0.3, y: 0.3, w: 0.05, h: 0.4, l: 1, color: '#8ac6d1' },
+      { x: 0.65, y: 0.3, w: 0.05, h: 0.4, l: 1, color: '#8ac6d1' },
+      { x: 0.35, y: 0.4, w: 0.25, h: 0.05, l: 1, color: '#8ac6d1' },
+      { x: 0.35, y: 0.55, w: 0.25, h: 0.05, l: 1, color: '#8ac6d1' },
+      { x: 0.35, y: 0.4, w: 0.05, h: 0.2, l: 1, color: '#8ac6d1' },
+      { x: 0.55, y: 0.4, w: 0.05, h: 0.2, l: 1, color: '#8ac6d1' },
+    ]
+  },
+  splitter: {
+    name: 'Y-Splitter',
+    description: 'Optical Power Splitter',
+    details: 'Splits one optical signal into two equal parts.',
+    goalRects: [
+      // Input waveguide
+      { x: 0.1, y: 0.45, w: 0.3, h: 0.1, l: 1, color: '#8ac6d1' },
+      // Split section
+      { x: 0.4, y: 0.4, w: 0.2, h: 0.2, l: 1, color: '#8ac6d1' },
+      // Output waveguides
+      { x: 0.6, y: 0.3, w: 0.3, h: 0.1, l: 1, color: '#8ac6d1' },
+      { x: 0.6, y: 0.6, w: 0.3, h: 0.1, l: 1, color: '#8ac6d1' }
+    ]
+  },
+  coupler: {
+    name: 'Directional Coupler',
+    description: 'Optical Directional Coupler',
+    details: 'Couples light between two parallel waveguides.',
+    goalRects: [
+      // Two parallel waveguides
+      { x: 0.1, y: 0.35, w: 0.8, h: 0.1, l: 1, color: '#8ac6d1' },
+      { x: 0.1, y: 0.55, w: 0.8, h: 0.1, l: 1, color: '#8ac6d1' },
+      // Coupling region (closer spacing)
+      { x: 0.4, y: 0.46, w: 0.2, h: 0.08, l: 1, color: '#8ac6d1' }
+    ]
+  }
+};
+
+function LevelSelect({ onSelectLevel }) {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100vh',
+      width: '100vw',
+      background: '#f0f0f0'
+    }}>
+      <h1 style={{ marginBottom: '2rem' }}>Cool-Fab-Games</h1>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: '1rem',
+        maxWidth: '1200px',
+        padding: '1rem'
+      }}>
+        {Object.entries(LEVELS).map(([key, level]) => (
+          <div
+            key={key}
+            style={{
+              background: '#fff',
+              border: '2px solid #ddd',
+              borderRadius: '8px',
+              padding: '1.5rem',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              textAlign: 'center'
+            }}
+            onClick={() => onSelectLevel(key)}
+            onMouseEnter={(e) => {
+              e.target.style.borderColor = '#007bff';
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.borderColor = '#ddd';
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = 'none';
+            }}
+          >
+            <h2 style={{ margin: '0 0 0.5rem 0', color: '#333' }}>{level.name}</h2>
+            <p style={{ margin: '0 0 1rem 0', color: '#666', fontWeight: 'bold' }}>{level.description}</p>
+            <p style={{ margin: 0, color: '#888', fontSize: '0.9rem' }}>{level.details}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function PhotomaskEditor({ photomask, onSave, onCancel }) {
   const canvasRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState(null);
+  const [dragEnd, setDragEnd] = useState(null);
+  const [dragMode, setDragMode] = useState(null); // 'add' or 'remove'
+  const [mouseDownPos, setMouseDownPos] = useState(null);
+  const [hasMoved, setHasMoved] = useState(false);
 
   // initialize empty grid once
   const [maskCells, setMaskCells] = useState(
@@ -46,7 +168,7 @@ function PhotomaskEditor({ photomask, onSave, onCancel }) {
     canvas.height = 400;
     drawGrid(ctx, canvas.width);
     drawCells(ctx, maskCells, canvas.width);
-  }, [maskCells]);
+  }, [maskCells, isDragging, dragStart, dragEnd, dragMode]);
 
   const drawGrid = (ctx, size) => {
     const cell = size / 20;
@@ -70,9 +192,34 @@ function PhotomaskEditor({ photomask, onSave, onCancel }) {
         if (filled) ctx.fillRect(c * cell, r * cell, cell, cell);
       })
     );
+    
+    // Draw drag preview
+    if (isDragging && dragStart && dragEnd) {
+      ctx.fillStyle = dragMode === 'add' ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.8)';
+      const minC = Math.min(dragStart.c, dragEnd.c);
+      const maxC = Math.max(dragStart.c, dragEnd.c);
+      const minR = Math.min(dragStart.r, dragEnd.r);
+      const maxR = Math.max(dragStart.r, dragEnd.r);
+      
+      for (let r = minR; r <= maxR; r++) {
+        for (let c = minC; c <= maxC; c++) {
+          ctx.fillRect(c * cell, r * cell, cell, cell);
+        }
+      }
+      
+      // Draw selection border
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        minC * cell, 
+        minR * cell, 
+        (maxC - minC + 1) * cell, 
+        (maxR - minR + 1) * cell
+      );
+    }
   };
 
-  const handleClick = e => {
+  const getCellFromEvent = (e) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -80,10 +227,83 @@ function PhotomaskEditor({ photomask, onSave, onCancel }) {
     const cell = canvas.width / 20;
     const c = Math.floor(x / cell);
     const r = Math.floor(y / cell);
+    return { c, r };
+  };
+
+  const handleMouseDown = e => {
+    const { c, r } = getCellFromEvent(e);
     if (r < 0 || r >= 20 || c < 0 || c >= 20) return;
-    const newCells = maskCells.map(row => row.slice());
-    newCells[r][c] = !newCells[r][c];
-    setMaskCells(newCells);
+    
+    setIsDragging(true);
+    setDragStart({ c, r });
+    setDragEnd({ c, r });
+    setMouseDownPos({ c, r });
+    setHasMoved(false);
+    // Determine drag mode based on current cell state
+    setDragMode(maskCells[r][c] ? 'remove' : 'add');
+  };
+
+  const handleMouseMove = e => {
+    if (!isDragging) return;
+    const { c, r } = getCellFromEvent(e);
+    if (r < 0 || r >= 20 || c < 0 || c >= 20) return;
+    
+    // Check if we've moved to a different cell
+    if (mouseDownPos && (c !== mouseDownPos.c || r !== mouseDownPos.r)) {
+      setHasMoved(true);
+    }
+    
+    setDragEnd({ c, r });
+  };
+
+  const handleMouseUp = e => {
+    if (!isDragging) return;
+    
+    const { c, r } = getCellFromEvent(e);
+    if (r < 0 || r >= 20 || c < 0 || c >= 20) {
+      setIsDragging(false);
+      setDragStart(null);
+      setDragEnd(null);
+      setDragMode(null);
+      setMouseDownPos(null);
+      setHasMoved(false);
+      return;
+    }
+    
+    // If we haven't moved, this is a click - toggle the cell
+    if (!hasMoved && mouseDownPos && c === mouseDownPos.c && r === mouseDownPos.r) {
+      const newCells = maskCells.map(row => row.slice());
+      newCells[r][c] = !newCells[r][c];
+      setMaskCells(newCells);
+    } else {
+      // Apply the drag selection
+      const newCells = maskCells.map(row => row.slice());
+      const minC = Math.min(dragStart.c, c);
+      const maxC = Math.max(dragStart.c, c);
+      const minR = Math.min(dragStart.r, r);
+      const maxR = Math.max(dragStart.r, r);
+      
+      for (let row = minR; row <= maxR; row++) {
+        for (let col = minC; col <= maxC; col++) {
+          newCells[row][col] = dragMode === 'add';
+        }
+      }
+      
+      setMaskCells(newCells);
+    }
+    
+    setIsDragging(false);
+    setDragStart(null);
+    setDragEnd(null);
+    setDragMode(null);
+    setMouseDownPos(null);
+    setHasMoved(false);
+  };
+
+  const handleClick = e => {
+    // Click handling is now done in handleMouseUp to avoid conflicts
+    // This prevents the onClick event from firing after drag operations
+    e.preventDefault();
   };
 
   const handleSave = () => {
@@ -110,6 +330,9 @@ function PhotomaskEditor({ photomask, onSave, onCancel }) {
       <canvas
         ref={canvasRef}
         style={{ border: '1px solid #000', cursor: 'pointer' }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onClick={handleClick}
       />
       <div style={{ marginTop: 10, display: 'flex', gap: 10 }}>
@@ -123,1565 +346,352 @@ function PhotomaskEditor({ photomask, onSave, onCancel }) {
 }
 
 // refactor everything to be squares, not layers and rectangles
+// Cube-based fabrication constants
+const GRID_SIZE = 20; // 20x20 grid
+const MAX_HEIGHT = 30; // Maximum height in cube layers
+const CUBE_SIZE = 1; // Each cube is 1x1x1 unit
+
+// Material types and colors
+const MATERIALS = {
+  EMPTY: { color: null, name: 'Empty' },
+  SUBSTRATE: { color: '#c0c0c0', name: 'Silicon Substrate' },
+  COPPER: { color: '#f6d186', name: 'Copper' },
+  SILICON_OXIDE: { color: '#8ac6d1', name: 'Silicon Oxide' },
+  AMORPHOUS_SILICON: { color: 'grey', name: 'Amorphous Silicon' },
+  PHOTORESIST: { color: 'green', name: 'Photoresist' }
+};
+
 export default function FabSimulator() {
-  const [layers, setLayers] = useState([]);
+  const [currentLevel, setCurrentLevel] = useState(null);
+  
+  // NEW: 3D cube grid - [x][y][z] where z=0 is bottom
+  const [cubeGrid, setCubeGrid] = useState(() => {
+    // Initialize with substrate at bottom layers
+    const grid = Array(GRID_SIZE).fill(null).map(() => 
+      Array(GRID_SIZE).fill(null).map(() => 
+        Array(MAX_HEIGHT).fill(MATERIALS.EMPTY)
+      )
+    );
+    
+    // Fill bottom 5 layers with substrate
+    for (let x = 0; x < GRID_SIZE; x++) {
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let z = 0; z < 5; z++) {
+          grid[x][y][z] = MATERIALS.SUBSTRATE;
+        }
+      }
+    }
+    
+    return grid;
+  });
+  
   const [photomask, setPhotomask] = useState(null);
   const [editingMask, setEditingMask] = useState(false);
-  const [maskRects, setMaskRects] = useState([]);
-  const [patternedRects, setPatternedRects] = useState([]);
-  const [isPatternedRects, setTFPatternedRects] = useState(false);
-  const [PRLevel, setPRLevel] = useState(null);
-  const [isResistMask, setResistMask] = useState(false);
-  const [goalLayers, setGoalLayers] = useState([]);
-  const [goalRects, setGoalRects] = useState([
-  {
-    "x": 0.4,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.15,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.2,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.25,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.7,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.75,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.8,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "grey"
-  },
-  {
-    "x": 0.35,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.55,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.35,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.55,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.35,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.55,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.35,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.55,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.35,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.55,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.35,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.4,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.45,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.5,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.55,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 2,
-    "color": "grey"
-  },
-  {
-    "x": 0.35,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.55,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.35,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.55,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.35,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.55,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.35,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.55,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.35,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.55,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.35,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.4,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.45,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.5,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.55,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 3,
-    "color": "#f6d186"
-  },
-  {
-    "x": 0.35,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.4,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.45,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.5,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.55,
-    "y": 0.35,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.35,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.4,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.45,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.5,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.55,
-    "y": 0.4,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.35,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.4,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.45,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.5,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.55,
-    "y": 0.45,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.35,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.4,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.45,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.5,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.55,
-    "y": 0.5,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.35,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.4,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.45,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.5,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.55,
-    "y": 0.55,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.35,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.4,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.45,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.5,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
-  },
-  {
-    "x": 0.55,
-    "y": 0.6,
-    "w": 0.05,
-    "h": 0.05,
-    "l": 1,
-    "color": "#8ac6d1"
+  const [goalRects, setGoalRects] = useState([]); // Will be set based on selected level
+  
+  // slider state for clipping plane - MUST be before conditional returns
+  const [slicePosition, setSlicePosition] = useState(1);
+
+    // at top of FabSimulator(), after your other hooks…
+  const diffCount = useMemo(() => {
+    // build a boolean goal‐grid [x][y][z]
+    const goalGrid = Array(GRID_SIZE).fill(null).map(() =>
+      Array(GRID_SIZE).fill(null).map(() =>
+        Array(MAX_HEIGHT).fill(false)
+      )
+    );
+
+    // mark all the goal cubes from goalRects
+    goalRects.forEach(r => {
+      const startX = Math.floor(r.x * GRID_SIZE);
+      const endX   = Math.floor((r.x + r.w) * GRID_SIZE);
+      const startY = Math.floor(r.y * GRID_SIZE);
+      const endY   = Math.floor((r.y + r.h) * GRID_SIZE);
+      const z      = r.l - 1 + 5;   // offset by your 5-layer substrate
+
+      for (let x = startX; x < endX; x++) {
+        for (let y = startY; y < endY; y++) {
+          if (
+            x >= 0 && x < GRID_SIZE &&
+            y >= 0 && y < GRID_SIZE &&
+            z >= 0 && z < MAX_HEIGHT
+          ) {
+            goalGrid[x][y][z] = true;
+          }
+        }
+      }
+    });
+
+    // compare user vs goal (ignore z < 5 since that's your fixed substrate)
+    let count = 0;
+    for (let x = 0; x < GRID_SIZE; x++) {
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let z = 5; z < MAX_HEIGHT; z++) {
+          const userHas = cubeGrid[x][y][z] !== MATERIALS.EMPTY;
+          const goalHas = goalGrid[x][y][z];
+          if (userHas !== goalHas) count++;
+        }
+      }
+    }
+    return count;
+  }, [cubeGrid, goalRects]);
+  
+  // Utility functions for cube operations
+  const getTopCubeHeight = (x, y, grid = cubeGrid) => {
+    for (let z = MAX_HEIGHT - 1; z >= 0; z--) {
+      if (grid[x][y][z] !== MATERIALS.EMPTY) {
+        return z;
+      }
+    }
+    return -1; // No cubes at this position
+  };
+  
+  const depositMaterial = (material, maskPattern = null) => {
+    setCubeGrid(prevGrid => {
+      const newGrid = prevGrid.map(xArray => 
+        xArray.map(yArray => [...yArray])
+      );
+      
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          // Check if we should deposit here (either no mask or mask allows it)
+          const shouldDeposit = !maskPattern || maskPattern[y][x];
+          
+          if (shouldDeposit) {
+            const topHeight = getTopCubeHeight(x, y, prevGrid);
+            const newHeight = topHeight + 1;
+            
+            if (newHeight < MAX_HEIGHT) {
+              newGrid[x][y][newHeight] = material;
+            }
+          }
+        }
+      }
+      
+      return newGrid;
+    });
+  };
+  
+  const etchTopLayer = (maskPattern = null) => {
+    setCubeGrid(prevGrid => {
+      const newGrid = prevGrid.map(xArray => 
+        xArray.map(yArray => [...yArray])
+      );
+      
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          // Check if we should etch here (either no mask or mask allows it)
+          const shouldEtch = !maskPattern || maskPattern[y][x];
+          
+          if (shouldEtch) {
+            const topHeight = getTopCubeHeight(x, y, prevGrid);
+            if (topHeight > 0) { // Don't etch substrate
+              newGrid[x][y][topHeight] = MATERIALS.EMPTY;
+            }
+          }
+        }
+      }
+      
+      return newGrid;
+    });
+  };
+  
+  // Convert photomask to boolean pattern for deposition/etching
+  const getMaskPattern = async (photomaskUrl) => {
+    if (!photomaskUrl) return null;
+    
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.src = photomaskUrl;
+    await new Promise(res => img.onload = res);
+    
+    const size = 200;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, size, size);
+    
+    const pattern = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+    const cellSize = size / GRID_SIZE;
+    
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const pixelData = ctx.getImageData(x * cellSize + cellSize/2, y * cellSize + cellSize/2, 1, 1).data;
+        pattern[y][x] = pixelData[0] < 128; // Black areas are true
+      }
+    }
+    
+    return pattern;
+  };
+  
+  // Convert slider position to discrete x-coordinate for cube filtering
+  const sliceX = Math.floor(slicePosition * GRID_SIZE);
+
+  // Handle level selection
+  const handleSelectLevel = (levelKey) => {
+    setCurrentLevel(levelKey);
+    const level = LEVELS[levelKey];
+    if (level) {
+      setGoalRects(level.goalRects);
+    }
+  };
+
+  // Show level select screen if no level is selected
+  if (!currentLevel) {
+    return <LevelSelect onSelectLevel={handleSelectLevel} />;
   }
-]);
 
-  const substrateHeight = 1.5;
-  const depositThickness = 0.1;
-
-  // slider state for clipping plane
-  const [slicePosition, setSlicePosition] = useState(-0.0001);
-  const clippingPlane = useMemo(() => {
-    const cutX = slicePosition * 5 - 2.501;
-    return new THREE.Plane(new THREE.Vector3(1, 0, 0), -cutX);
-  }, [slicePosition]);
-
-// Estimate mask cells from saved image
-  const approximateMaskRects = async (url, layer) => {
-    const img = new Image();
-    img.crossOrigin = 'Anonymous';
-    img.src = url;
-    await new Promise(res => img.onload = res);
-    const size = 200;
-    const off = document.createElement('canvas');
-    off.width = off.height = size;
-    const ctx = off.getContext('2d');
-    ctx.drawImage(img, 0, 0, size, size);
-    const grid = 20;
-    const rects = [];
-    const cell = size / grid;
-    for (let r = 0; r < grid; r++) {
-      for (let c = 0; c < grid; c++) {
-        const p = ctx.getImageData(c * cell + cell/2, r * cell + cell/2, 1, 1).data;
-        if (p[0] < 128) rects.push({ x: c / grid, y: r / grid, w: 1 / grid, h: 1 / grid, l: layer });
-      }
-    }
-    return rects;
-  };
-
-  // Estimate mask cells from saved image
-  const approximateLayerRects = async (url, layer) => {
-    const img = new Image();
-    img.crossOrigin = 'Anonymous';
-    img.src = url;
-    await new Promise(res => img.onload = res);
-    const size = 200;
-    const off = document.createElement('canvas');
-    off.width = off.height = size;
-    const ctx = off.getContext('2d');
-    ctx.drawImage(img, 0, 0, size, size);
-    const grid = 20;
-    const rects = [];
-    const cell = size / grid;
-    let color = "#c0c0c0";
-    if (layers.length > 0) {
-      color = layers[layer-1].color;
-    }
-
-    for (let r = 0; r < grid; r++) {
-      for (let c = 0; c < grid; c++) {
-        const p = ctx.getImageData(c * cell + cell/2, r * cell + cell/2, 1, 1).data;
-        if (p[0] < 128) rects.push({ x: c / grid, y: r / grid, w: 1 / grid, h: 1 / grid, l: layer, color: color});
-      }
-    }
-    return rects;
-  };
+  const currentLevelData = LEVELS[currentLevel];
+  if (!currentLevelData) {
+    return <LevelSelect onSelectLevel={handleSelectLevel} />;
+  }
+  
+  // These old functions are no longer needed with the cube system
 
   const handleDeposit_Cu = () => {
-    const color = '#f6d186';
-    setLayers([...layers, { thickness: depositThickness, color }]);
-
-    if (patternedRects) {
-    const maxLevel = Math.max(...patternedRects.map(r => r.l));
-      if (maxLevel > layers.length) {
-      // Grab only the rects at that top level,
-      // clone them with their level bumped by +1:
-      const grown = patternedRects
-        .filter(r => r.l === maxLevel)
-        .map(r => ({ 
-          ...r,          // copy x, y, w, h, color, etc.
-          color: color,
-          l: r.l + 1     // bump the level
-        }));
-
-      // Concatenate back to get the “tower grown” array:
-      setPatternedRects(patternedRects.concat(grown));
-      }
-    }
+    depositMaterial(MATERIALS.COPPER);
   };
 
   const handleDeposit_SiO2 = () => {
-    const color = '#8ac6d1';
-    setLayers([...layers, { thickness: depositThickness, color }]);
-
-    if (patternedRects) {
-    const maxLevel = Math.max(...patternedRects.map(r => r.l));
-      if (maxLevel > layers.length) {
-      // Grab only the rects at that top level,
-      // clone them with their level bumped by +1:
-      const grown = patternedRects
-        .filter(r => r.l === maxLevel)
-        .map(r => ({ 
-          ...r,          // copy x, y, w, h, color, etc.
-          color: color,
-          l: r.l + 1     // bump the level
-        }));
-
-      // Concatenate back to get the “tower grown” array:
-      setPatternedRects(patternedRects.concat(grown));
-      }
-    }
+    depositMaterial(MATERIALS.SILICON_OXIDE);
   };
 
   const handleDeposit_aSi = () => {
-    const color = 'grey';
-    setLayers([...layers, { thickness: depositThickness, color }]);
-
-    if (patternedRects) {
-    const maxLevel = Math.max(...patternedRects.map(r => r.l));
-      if (maxLevel > layers.length) {
-      // Grab only the rects at that top level,
-      // clone them with their level bumped by +1:
-      const grown = patternedRects
-        .filter(r => r.l === maxLevel)
-        .map(r => ({ 
-          ...r,          // copy x, y, w, h, color, etc.
-          color: color,
-          l: r.l + 1     // bump the level
-        }));
-
-      // Concatenate back to get the “tower grown” array:
-      setPatternedRects(patternedRects.concat(grown));
-      }
-    }
+    depositMaterial(MATERIALS.AMORPHOUS_SILICON);
   };
 
   const handleSpin = () => {
-    //need some logic to handle if the highest layer is completely covered by patterened rects
-    setLayers([...layers, { thickness: depositThickness, color: 'green' }]);
-    //setPRLevel(layers.length-1);
-    setMaskRects([]);
-    if (patternedRects) {
-    const maxLevel = Math.max(...patternedRects.map(r => r.l));
-      if (maxLevel > layers.length) {
-      // Grab only the rects at that top level,
-      // clone them with their level bumped by +1:
-      console.log("conditions met")
-      const grown = patternedRects
-        .filter(r => r.l === maxLevel)
-        .map(r => ({ 
-          ...r,          // copy x, y, w, h, color, etc.
-          l: r.l - 1     // fix the level, I know magic number bad!
-        }));
-
-      // Concatenate back to get the “tower grown” array:
-      setMaskRects(maskRects.concat(grown));
-      return;
-      }
-    }
-
+    // Spin photoresist - deposits a layer of photoresist over entire surface
+    depositMaterial(MATERIALS.PHOTORESIST);
   };
 
 
   const handlePlasmaClean = () => {
-    // Remove all resist layers (full and patterned)
-    const idx = layers.findIndex(l => l.color === 'green');
-    const newLayers = idx !== -1 ? layers.slice(0, idx) : layers;
-    setLayers(newLayers);
-    // Clear any patterned resist
-    setResistMask(false)
-    setMaskRects([]);
-    setPRLevel(null);
-    const json = JSON.stringify(patternedRects, null, 2);
-    // 1) print to console
-    console.log(json);
+    // Liftoff process: Remove photoresist and any material deposited on top of it
+    setCubeGrid(prevGrid => {
+      const newGrid = prevGrid.map(xArray => 
+        xArray.map(yArray => [...yArray])
+      );
+      
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          // Find all photoresist layers at this position
+          for (let z = 0; z < MAX_HEIGHT; z++) {
+            if (newGrid[x][y][z] === MATERIALS.PHOTORESIST) {
+              // Remove the photoresist
+              newGrid[x][y][z] = MATERIALS.EMPTY;
+              
+              // Remove everything above this photoresist layer (liftoff)
+              for (let zAbove = z + 1; zAbove < MAX_HEIGHT; zAbove++) {
+                if (newGrid[x][y][zAbove] !== MATERIALS.EMPTY) {
+                  newGrid[x][y][zAbove] = MATERIALS.EMPTY;
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      return newGrid;
+    });
   };
 
   const handleExposeDevelop = async () => {
     if (!photomask) return;
-    const idx = layers.findIndex(l => l.color === 'green');
-    if (idx === -1) return;
-    if (patternedRects) {
-    const maxLevel = Math.max(...patternedRects.map(r => r.l));
-    console.log(maxLevel);
-    console.log(layers.length);
-      if (maxLevel > layers.length) {
-        const rects = await approximateMaskRects(photomask, maxLevel-1);
-
-        setResistMask(true)
-        setLayers(layers.slice(0, idx));
-        setMaskRects(rects);
-        return;
-      }}
-
-    const rects = await approximateMaskRects(photomask, layers.length-2);
-
-    setResistMask(true)
-    setLayers(layers.slice(0, idx));
-    setMaskRects(rects);
+    
+    // Get mask pattern and remove photoresist where exposed (black areas)
+    const maskPattern = await getMaskPattern(photomask);
+    if (!maskPattern) return;
+    
+    setCubeGrid(prevGrid => {
+      const newGrid = prevGrid.map(xArray => 
+        xArray.map(yArray => [...yArray])
+      );
+      
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          // If mask is true (black area), remove photoresist
+          if (maskPattern[y][x]) {
+            for (let z = 0; z < MAX_HEIGHT; z++) {
+              if (newGrid[x][y][z] === MATERIALS.PHOTORESIST) {
+                newGrid[x][y][z] = MATERIALS.EMPTY;
+              }
+            }
+          }
+        }
+      }
+      
+      return newGrid;
+    });
   };
 
-  //const handleEtch = () => setLayers(layers.slice(0, -1));
-
-  const handleEtch = async () => {
-    if (!isResistMask) {
-      //remove top layer
-      setLayers(layers.slice(0, -1));
-      // remove top rectangles
-      const maxLevel = Math.max(...patternedRects.map(r => r.l));
-      const filtered = patternedRects.filter(r => r.l < maxLevel);
-      setPatternedRects(filtered);
-      return;
-    }
-    //else
-    // get the newly computed mask‐rects:
-    const maskRects = await approximateMaskRects(photomask)
-
-    // 1) figure out what your current top‐level is:
-    const maxLevel = Math.max(...patternedRects.map(r => r.l))
-
-    // 2) grab everything below that level unchanged:
-    const belowTop = patternedRects.filter(r => r.l < maxLevel)
-
-    // 3) grab only those top‐level rects that actually intersect the mask:
-    const topRects = patternedRects.filter(r => r.l === maxLevel)
-    const underMask = topRects.filter(r =>
-      maskRects.some(m =>
-        r.x <  m.x + m.w &&
-        r.x + r.w > m.x  &&
-        r.y <  m.y + m.h &&
-        r.y + r.h > m.y
-      )
-    )
-
-    // 4) re-assemble the ones you’re preserving:
-    const preserved = [...belowTop, ...underMask]
-
-    // 5) grow your newly‐exposed layer on top of those
-    const newLayerRects = await approximateLayerRects(photomask, layers.length)
-    const newPatterned = preserved.concat(newLayerRects)
-
-    //setMaskRects(maskRects)
-    setPatternedRects(newPatterned)
-    setLayers(layers.slice(0, -1))
+  const handleEtch = () => {
+    // Etch top layer where not protected by photoresist
+    setCubeGrid(prevGrid => {
+      const newGrid = prevGrid.map(xArray => 
+        xArray.map(yArray => [...yArray])
+      );
+      
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          const topHeight = getTopCubeHeight(x, y, prevGrid);
+          
+          if (topHeight > 0) { // Don't etch substrate
+            // Check if this position is protected by photoresist
+            let isProtected = false;
+            for (let z = topHeight + 1; z < MAX_HEIGHT; z++) {
+              if (newGrid[x][y][z] === MATERIALS.PHOTORESIST) {
+                isProtected = true;
+                break;
+              }
+            }
+            
+            // If not protected, etch the top cube
+            if (!isProtected) {
+              newGrid[x][y][topHeight] = MATERIALS.EMPTY;
+            }
+          }
+        }
+      }
+      
+      return newGrid;
+    });
   };
 
-  const handleCMP = async () => {
-    // the “blanket” film is exactly layers.length tall
-    const fullLevel = layers.length;
+  const handleCMP = () => {
+    // Chemical Mechanical Planarization - flatten the surface
+    setCubeGrid(prevGrid => {
+      // Find the lowest height across all positions
+      let minHeight = MAX_HEIGHT;
+      
+      // Find the minimum height across the surface
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          const topHeight = getTopCubeHeight(x, y, prevGrid);
+          if (topHeight < minHeight) {
+            minHeight = topHeight;
+          }
+        }
+      }
+      
+      // Remove everything above the minimum height to create a flat surface
+      const newGrid = prevGrid.map(xArray => 
+        xArray.map(yArray => [...yArray])
+      );
+      
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          for (let z = minHeight + 1; z < MAX_HEIGHT; z++) {
+            newGrid[x][y][z] = MATERIALS.EMPTY;
+          }
+        }
+      }
+      
+      return newGrid;
+    });
+  };
 
-    // remove any extra-patterned features above that
-    setPatternedRects(prev => prev.filter(r => r.l <= fullLevel));
 
-    // likewise knock off any mask‐overlays that poke above
-    setMaskRects(prev => prev.filter(r => r.l <= fullLevel));
-  }
 
   const openMaskEditor = () => setEditingMask(true);
   const saveMask = (m) => { setPhotomask(m); setEditingMask(false); };
@@ -1704,6 +714,7 @@ export default function FabSimulator() {
           photomask={photomask}
           onSave={saveMask}
           onCancel={cancelMask}
+          goalRects={goalRects}
         />
       </div>
     );
@@ -1727,11 +738,25 @@ export default function FabSimulator() {
         background: '#fff',
         boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
       }}>
-        {/* MOSFET Panel */}
+        {/* Level Info Panel */}
         <div style={{ gridRow: '1/2', gridColumn: '1/2', background: '#f4f4f4' }}>
-          <h3 style={{paddingLeft: 10}}>Build a MOSFET</h3>
-          <p style={{paddingLeft: 10}}>Metal-Oxide Semiconductor Field Effect Transistor</p>
-          <p style={{paddingLeft: 10}}>Modern chips have <b>billions</b> of these small electronic switches.</p>
+          <h3 style={{paddingLeft: 10}}>Build a {currentLevelData.name}</h3>
+          <p style={{paddingLeft: 10}}>{currentLevelData.description}</p>
+          <p style={{paddingLeft: 10}}>{currentLevelData.details}</p>
+          <button 
+            onClick={() => setCurrentLevel(null)} 
+            style={{ 
+              margin: '10px', 
+              padding: '8px 16px', 
+              border: 'none', 
+              borderRadius: '4px', 
+              background: '#007bff', 
+              color: 'white', 
+              cursor: 'pointer' 
+            }}
+          >
+            ← Back to Level Select
+          </button>
         </div>
 
         {/* 3D Goal with Clipping Slider */}
@@ -1744,51 +769,87 @@ export default function FabSimulator() {
           height: '100%'
         }}>
           <Canvas
-            gl={{ localClippingEnabled: true }}
             style={{ width: '100%', height: 'calc(100% - 40px)' }}
-            camera={{ position: [3, 6, 12], fov: 45 }}
+            camera={{ position: [30, 20, 30], fov: 45 }}
           >
             <ambientLight intensity={0.5} />
-            <directionalLight position={[5,10,7]} intensity={1} />
+            <directionalLight position={[-15, 15, 5]} intensity={1} />
 
-            {/* substrate */}
-            <mesh position={[0, substrateHeight/2, 0]}>
-              <boxGeometry args={[5, substrateHeight, 5]} />
-              <meshStandardMaterial
-                color="#c0c0c0"
-                clippingPlanes={[clippingPlane]}
-                clipShadows
-              />
-            </mesh>
-
-            {/* patterned deposits */}
-            {goalRects.map((r,i) => {
-              const yPos = substrateHeight + (r.l-1)*depositThickness + depositThickness/2;
-              const x = (r.x + r.w/2 - 0.5)*5;
-              const z = (r.y + r.h/2 - 0.5)*5;
-              return (
-                <mesh key={i} position={[x, yPos, z]}>
-                  <boxGeometry args={[r.w*5, depositThickness, r.h*5]} />
-                  <meshStandardMaterial
-                    color={r.color}
-                    clippingPlanes={[clippingPlane]}
-                    clipShadows
-                  />
-                </mesh>
-              );
+            {/* Render substrate layers for goal as individual cubes */}
+            {Array.from({ length: 5 }, (_, z) => {
+              const cubes = [];
+              for (let x = 0; x < GRID_SIZE; x++) {
+                for (let y = 0; y < GRID_SIZE; y++) {
+                  // Only render cubes at or below the slice position
+                  if (x <= sliceX) {
+                    const worldX = x - GRID_SIZE/2 + 0.5;
+                    const worldY = z + 0.5;
+                    const worldZ = y - GRID_SIZE/2 + 0.5;
+                    
+                    cubes.push(
+                      <mesh 
+                        key={`goal-substrate-${x}-${y}-${z}`} 
+                        position={[worldX, worldY, worldZ]}
+                      >
+                        <boxGeometry args={[CUBE_SIZE, CUBE_SIZE, CUBE_SIZE]} />
+                        <meshStandardMaterial
+                          color={MATERIALS.SUBSTRATE.color}
+                        />
+                      </mesh>
+                    );
+                  }
+                }
+              }
+              return cubes;
             })}
 
-            {/* CAP THE CUT FACE */}
+            {/* Render goal structure as cubes */}
+            {goalRects.map((r,i) => {
+              // Convert old rect format to cube positions
+              const startX = Math.floor(r.x * GRID_SIZE);
+              const endX = Math.floor((r.x + r.w) * GRID_SIZE);
+              const startY = Math.floor(r.y * GRID_SIZE);
+              const endY = Math.floor((r.y + r.h) * GRID_SIZE);
+              const z = r.l - 1 + 5; // Convert 1-based layer to 0-based z, offset by 5 for substrate
+              
+              const cubes = [];
+              for (let x = startX; x < endX; x++) {
+                for (let y = startY; y < endY; y++) {
+                  // Only render cubes at or below the slice position
+                  if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE && z >= 0 && z < MAX_HEIGHT && x <= sliceX) {
+                    const worldX = x - GRID_SIZE/2 + 0.5;
+                    const worldY = z + 0.5;
+                    const worldZ = y - GRID_SIZE/2 + 0.5;
+                    
+                    cubes.push(
+                      <mesh 
+                        key={`goal-${i}-${x}-${y}-${z}`} 
+                        position={[worldX, worldY, worldZ]}
+                      >
+                        <boxGeometry args={[CUBE_SIZE, CUBE_SIZE, CUBE_SIZE]} />
+                        <meshStandardMaterial
+                          color={r.color}
+                        />
+                        {/*<Edges color="black" lineWidth={1} /> */}
+                      </mesh>
+                    );
+                  }
+                }
+              }
+              return cubes;
+            })}
+
+{/*              CAP THE CUT FACE 
             <mesh
-              position={[slicePosition * 5 - 2.501, substrateHeight/2, 0]}
+              position={[slicePosition * GRID_SIZE - (GRID_SIZE/2 + 0.1), MAX_HEIGHT/2, 0]}
               rotation={[0, Math.PI/2, 0]}
             >
-              <planeGeometry args={[5, substrateHeight]} />
+              <planeGeometry args={[GRID_SIZE, MAX_HEIGHT]} />
               <meshStandardMaterial
                 color="#c0c0c0"
                 side={THREE.DoubleSide}
               />
-            </mesh>
+            </mesh> */}
 
             <OrbitControls />
           </Canvas>
@@ -1807,86 +868,53 @@ export default function FabSimulator() {
           />
         </div>
 
-        {/* 3D View, also clipped */}
+        {/* 3D View - Cube-based rendering */}
         <div style={{ gridRow:'1/3',gridColumn:'2/3' }}>
           <Canvas
-            gl={{ localClippingEnabled: true }}
             style={{ width:'100%',height:'100%' }}
-            camera={{ position:[3,5,10], fov:45 }}
+            camera={{ position:[30, 20, 30], fov:45 }}
           >
             <ambientLight intensity={0.5} />
-            <directionalLight position={[5,10,7]} intensity={1} />
+            <directionalLight position={[-15, 15, 5]} intensity={1} />
 
-            {/* substrate */}
-            <mesh position={[0, substrateHeight/2, 0]}>
-              <boxGeometry args={[5, substrateHeight, 5]} />
-              <meshStandardMaterial
-                color="#c0c0c0"
-                clippingPlanes={[clippingPlane]}
-                clipShadows
-              />
-            </mesh>
+            {/* Render all cubes */}
+            {cubeGrid.map((xArray, x) =>
+              xArray.map((yArray, y) =>
+                yArray.map((cube, z) => {
+                  // Only render cubes at or below the slice position
+                  if (cube === MATERIALS.EMPTY || x > sliceX) return null;
+                  
+                  const worldX = x - GRID_SIZE/2 + 0.5;
+                  const worldY = z + 0.5;
+                  const worldZ = y - GRID_SIZE/2 + 0.5;
+                  
+                  return (
+                    <mesh 
+                      key={`${x}-${y}-${z}`} 
+                      position={[worldX, worldY, worldZ]}
+                    >
+                      <boxGeometry args={[CUBE_SIZE, CUBE_SIZE, CUBE_SIZE]} />
+                      <meshStandardMaterial
+                        color={cube.color}
+                      />
+                      {/*{cube !== MATERIALS.SUBSTRATE && <Edges color="black" lineWidth={1} />}*/}
+                    </mesh>
+                  );
+                })
+              )
+            )}
 
-            {/* stacked layers */}
-            {layers.map((l,i) => {
-              const yOff = layers.slice(0,i).reduce((sum,x)=>sum+x.thickness, substrateHeight);
-              return (
-                <mesh key={i} position={[0, yOff + l.thickness/2, 0]}>
-                  <boxGeometry args={[5, l.thickness, 5]} />
-                  <meshStandardMaterial
-                    color={l.color}
-                    clippingPlanes={[clippingPlane]}
-                    clipShadows
-                  />
-                </mesh>
-              );
-            })}
-
-            {/* patterned deposits */}
-            {patternedRects.map((r,i) => {
-              const yPos = substrateHeight + (r.l-1)*depositThickness + depositThickness/2;
-              const x = (r.x + r.w/2 - 0.5)*5;
-              const z = (r.y + r.h/2 - 0.5)*5;
-              return (
-                <mesh key={i} position={[x, yPos, z]}>
-                  <boxGeometry args={[r.w*5, depositThickness, r.h*5]} />
-                  <meshStandardMaterial
-                    color={r.color}
-                    clippingPlanes={[clippingPlane]}
-                    clipShadows
-                  />
-                </mesh>
-              );
-            })}
-
-            {/* resist mask */}
-            {maskRects.map((r,i) => {
-              const yPos = substrateHeight + r.l*depositThickness + depositThickness*1.5;
-              const x = (r.x + r.w/2 - 0.5)*5;
-              const z = (r.y + r.h/2 - 0.5)*5;
-              return (
-                <mesh key={i} position={[x, yPos, z]}>
-                  <boxGeometry args={[r.w*5, depositThickness, r.h*5]} />
-                  <meshStandardMaterial
-                    color="green"
-                    clippingPlanes={[clippingPlane]}
-                    clipShadows
-                  />
-                </mesh>
-              );
-            })}
-
-            {/* CAP THE CUT FACE */}
+            {/* CAP THE CUT FACE
             <mesh
-              position={[slicePosition * 5 - 2.501, substrateHeight/2, 0]}
+              position={[slicePosition * GRID_SIZE - (GRID_SIZE/2 + 0.1), MAX_HEIGHT/2, 0]}
               rotation={[0, Math.PI/2, 0]}
             >
-              <planeGeometry args={[5, substrateHeight]} />
+              <planeGeometry args={[GRID_SIZE, MAX_HEIGHT]} />
               <meshStandardMaterial
                 color="#c0c0c0"
                 side={THREE.DoubleSide}
               />
-            </mesh>
+            </mesh> */}
 
             <OrbitControls />
           </Canvas>
@@ -1916,6 +944,7 @@ export default function FabSimulator() {
               : <span style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%, -50%)'}}>Edit Mask</span>
             }
           </button>
+          <p>{diffCount} blocks away</p>
         </div>
       </div>
     </div>
