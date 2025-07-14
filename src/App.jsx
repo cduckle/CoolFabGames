@@ -4,6 +4,8 @@ import { OrbitControls, Edges } from '@react-three/drei';
 import * as THREE from 'three';
 import { mask, pattern } from 'framer-motion/client';
 import { MOSFET_GOAL_RECTS } from './mosfetGoal.js';
+import Confetti from 'react-confetti';
+
 
 // Level definitions
 const LEVELS = {
@@ -120,21 +122,22 @@ function LevelSelect({ onSelectLevel }) {
   );
 }
 
-function PhotomaskEditor({ photomask, onSave, onCancel }) {
-  const canvasRef = useRef(null);
+function PhotomaskEditor({ photomask, onSave, onCancel, goalRects }) {
+  const maskRef = useRef(null);
+  const goalRef = useRef(null);
+
+  // Mask editor state
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
   const [dragEnd, setDragEnd] = useState(null);
-  const [dragMode, setDragMode] = useState(null); // 'add' or 'remove'
+  const [dragMode, setDragMode] = useState(null);
   const [mouseDownPos, setMouseDownPos] = useState(null);
   const [hasMoved, setHasMoved] = useState(false);
-
-  // initialize empty grid once
   const [maskCells, setMaskCells] = useState(
     () => Array.from({ length: 20 }, () => Array(20).fill(false))
   );
 
-  // whenever photomask URL changes, decode it back into maskCells
+  // Decode existing photomask URL into maskCells when opening editor
   useEffect(() => {
     if (!photomask) return;
     const img = new Image();
@@ -153,7 +156,7 @@ function PhotomaskEditor({ photomask, onSave, onCancel }) {
 
       for (let r = 0; r < grid; r++) {
         for (let c = 0; c < grid; c++) {
-          const p = ctx.getImageData(c * cell + cell/2, r * cell + cell/2, 1, 1).data;
+          const p = ctx.getImageData(c * cell + cell / 2, r * cell + cell / 2, 1, 1).data;
           if (p[0] < 128) newCells[r][c] = true;
         }
       }
@@ -161,15 +164,7 @@ function PhotomaskEditor({ photomask, onSave, onCancel }) {
     };
   }, [photomask]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    canvas.width = 400;
-    canvas.height = 400;
-    drawGrid(ctx, canvas.width);
-    drawCells(ctx, maskCells, canvas.width);
-  }, [maskCells, isDragging, dragStart, dragEnd, dragMode]);
-
+  // Utility to draw grid
   const drawGrid = (ctx, size) => {
     const cell = size / 20;
     ctx.clearRect(0, 0, size, size);
@@ -184,6 +179,7 @@ function PhotomaskEditor({ photomask, onSave, onCancel }) {
     }
   };
 
+  // Utility to draw mask cells
   const drawCells = (ctx, cells, size) => {
     const cell = size / 20;
     ctx.fillStyle = '#000';
@@ -192,106 +188,98 @@ function PhotomaskEditor({ photomask, onSave, onCancel }) {
         if (filled) ctx.fillRect(c * cell, r * cell, cell, cell);
       })
     );
-    
-    // Draw drag preview
+
+    // Drag preview
     if (isDragging && dragStart && dragEnd) {
-      ctx.fillStyle = dragMode === 'add' ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.8)';
+      ctx.fillStyle = dragMode === 'add' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.8)';
       const minC = Math.min(dragStart.c, dragEnd.c);
       const maxC = Math.max(dragStart.c, dragEnd.c);
       const minR = Math.min(dragStart.r, dragEnd.r);
       const maxR = Math.max(dragStart.r, dragEnd.r);
-      
       for (let r = minR; r <= maxR; r++) {
         for (let c = minC; c <= maxC; c++) {
           ctx.fillRect(c * cell, r * cell, cell, cell);
         }
       }
-      
-      // Draw selection border
-      ctx.strokeStyle = '#ff0000';
+      ctx.strokeStyle = '#f00';
       ctx.lineWidth = 2;
       ctx.strokeRect(
-        minC * cell, 
-        minR * cell, 
-        (maxC - minC + 1) * cell, 
+        minC * cell,
+        minR * cell,
+        (maxC - minC + 1) * cell,
         (maxR - minR + 1) * cell
       );
     }
   };
 
-  const getCellFromEvent = (e) => {
-    const canvas = canvasRef.current;
+  const getCellFromEvent = e => {
+    const canvas = maskRef.current;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const cell = canvas.width / 20;
-    const c = Math.floor(x / cell);
-    const r = Math.floor(y / cell);
-    return { c, r };
+    return { c: Math.floor(x / cell), r: Math.floor(y / cell) };
   };
 
+  // Mask drawing effect
+  useEffect(() => {
+    if (!maskRef.current) return;
+    const ctx = maskRef.current.getContext('2d');
+    const size = maskRef.current.width;
+    drawGrid(ctx, size);
+    drawCells(ctx, maskCells, size);
+  }, [maskCells, isDragging, dragStart, dragEnd, dragMode]);
+
+  // Goal drawing effect
+  useEffect(() => {
+    if (!goalRef.current) return;
+    const ctx = goalRef.current.getContext('2d');
+    const size = goalRef.current.width;
+    drawGrid(ctx, size);
+    goalRects.forEach(r => {
+      ctx.fillStyle = r.color;
+      ctx.fillRect(r.x * size, r.y * size, r.w * size, r.h * size);
+    });
+  }, [goalRects]);
+
+  // Event handlers
   const handleMouseDown = e => {
     const { c, r } = getCellFromEvent(e);
-    if (r < 0 || r >= 20 || c < 0 || c >= 20) return;
-    
+    if (c < 0 || c >= 20 || r < 0 || r >= 20) return;
     setIsDragging(true);
     setDragStart({ c, r });
     setDragEnd({ c, r });
     setMouseDownPos({ c, r });
     setHasMoved(false);
-    // Determine drag mode based on current cell state
     setDragMode(maskCells[r][c] ? 'remove' : 'add');
   };
 
   const handleMouseMove = e => {
     if (!isDragging) return;
     const { c, r } = getCellFromEvent(e);
-    if (r < 0 || r >= 20 || c < 0 || c >= 20) return;
-    
-    // Check if we've moved to a different cell
-    if (mouseDownPos && (c !== mouseDownPos.c || r !== mouseDownPos.r)) {
-      setHasMoved(true);
-    }
-    
+    if (c < 0 || c >= 20 || r < 0 || r >= 20) return;
+    if (mouseDownPos && (c !== mouseDownPos.c || r !== mouseDownPos.r)) setHasMoved(true);
     setDragEnd({ c, r });
   };
 
   const handleMouseUp = e => {
     if (!isDragging) return;
-    
     const { c, r } = getCellFromEvent(e);
-    if (r < 0 || r >= 20 || c < 0 || c >= 20) {
-      setIsDragging(false);
-      setDragStart(null);
-      setDragEnd(null);
-      setDragMode(null);
-      setMouseDownPos(null);
-      setHasMoved(false);
-      return;
-    }
-    
-    // If we haven't moved, this is a click - toggle the cell
+    const newCells = maskCells.map(row => row.slice());
     if (!hasMoved && mouseDownPos && c === mouseDownPos.c && r === mouseDownPos.r) {
-      const newCells = maskCells.map(row => row.slice());
       newCells[r][c] = !newCells[r][c];
-      setMaskCells(newCells);
     } else {
-      // Apply the drag selection
-      const newCells = maskCells.map(row => row.slice());
       const minC = Math.min(dragStart.c, c);
       const maxC = Math.max(dragStart.c, c);
       const minR = Math.min(dragStart.r, r);
       const maxR = Math.max(dragStart.r, r);
-      
-      for (let row = minR; row <= maxR; row++) {
-        for (let col = minC; col <= maxC; col++) {
-          newCells[row][col] = dragMode === 'add';
+      for (let rr = minR; rr <= maxR; rr++) {
+        for (let cc = minC; cc <= maxC; cc++) {
+          newCells[rr][cc] = dragMode === 'add';
         }
       }
-      
-      setMaskCells(newCells);
     }
-    
+    setMaskCells(newCells);
     setIsDragging(false);
     setDragStart(null);
     setDragEnd(null);
@@ -300,50 +288,48 @@ function PhotomaskEditor({ photomask, onSave, onCancel }) {
     setHasMoved(false);
   };
 
-  const handleClick = e => {
-    // Click handling is now done in handleMouseUp to avoid conflicts
-    // This prevents the onClick event from firing after drag operations
-    e.preventDefault();
-  };
+  const handleClick = e => e.preventDefault();
 
   const handleSave = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 400;
-    canvas.height = 400;
-    const ctx = canvas.getContext('2d');
-    drawGrid(ctx, canvas.width);
-    drawCells(ctx, maskCells, canvas.width);
+    const canvas = maskRef.current;
     onSave(canvas.toDataURL());
   };
 
-  const handleReset = () => {
-    setMaskCells(Array.from({ length: 20 }, () => Array(20).fill(false)));
-  };
-
-  const handleInvert = () => {
-    setMaskCells(maskCells.map(row => row.map(cell => !cell)));
-  };
+  const handleReset = () => setMaskCells(Array.from({ length: 20 }, () => Array(20).fill(false)));
+  const handleInvert = () => setMaskCells(maskCells.map(row => row.map(cell => !cell)));
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>Photomask Editor</h2>
-      <canvas
-        ref={canvasRef}
-        style={{ border: '1px solid #000', cursor: 'pointer' }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onClick={handleClick}
-      />
-      <div style={{ marginTop: 10, display: 'flex', gap: 10 }}>
-        <button onClick={handleSave}>Save Mask</button>
-        <button onClick={handleReset}>Reset</button>
-        <button onClick={handleInvert}>Invert</button>
-        <button onClick={onCancel}>Cancel</button>
+    <div style={{ display: 'flex', background: '#fff', padding: 20, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.2)', gap: 20 }}>
+      {/* Goal view */}
+      <div>
+        <h3 style={{ margin: '0 0 10px' }}>Goal</h3>
+        <canvas ref={goalRef} width={200} height={200} style={{ border: '1px solid #000' }} />
+      </div>
+
+      {/* Mask editor view */}
+      <div>
+        <h3 style={{ margin: '0 0 10px' }}>Photomask Editor</h3>
+        <canvas
+          ref={maskRef}
+          width={400}
+          height={400}
+          style={{ border: '1px solid #000', cursor: 'pointer' }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onClick={handleClick}
+        />
+        <div style={{ marginTop: 10, display: 'flex', gap: 10 }}>
+          <button onClick={handleSave}>Save Mask</button>
+          <button onClick={handleReset}>Reset</button>
+          <button onClick={handleInvert}>Invert</button>
+          <button onClick={onCancel}>Cancel</button>
+        </div>
       </div>
     </div>
   );
 }
+
 
 // refactor everything to be squares, not layers and rectangles
 // Cube-based fabrication constants
@@ -391,6 +377,10 @@ export default function FabSimulator() {
   
   // slider state for clipping plane - MUST be before conditional returns
   const [slicePosition, setSlicePosition] = useState(1);
+  // At the top of your FabSimulator component, after your diffCount calculation:
+  const [completed, setCompleted] = useState(false);
+
+
 
     // at top of FabSimulator(), after your other hooks…
   const diffCount = useMemo(() => {
@@ -435,6 +425,10 @@ export default function FabSimulator() {
     }
     return count;
   }, [cubeGrid, goalRects]);
+
+  useEffect(() => {
+    setCompleted(diffCount === 0);
+    }, [diffCount]);
   
   // Utility functions for cube operations
   const getTopCubeHeight = (x, y, grid = cubeGrid) => {
@@ -868,6 +862,24 @@ export default function FabSimulator() {
           />
         </div>
 
+        {completed && (
+          <div style={{
+            position: 'absolute',
+            top: '10%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontSize: '3rem',
+            color: '#28a745',
+            zIndex: 10,
+            pointerEvents: 'none',
+          }}>
+            Completed!
+          </div>
+        )}
+
+        {completed && <Confetti />}
+
+        
         {/* 3D View - Cube-based rendering */}
         <div style={{ gridRow:'1/3',gridColumn:'2/3' }}>
           <Canvas
