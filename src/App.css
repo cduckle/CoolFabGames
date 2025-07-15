@@ -18,6 +18,11 @@
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
 
+.arrow.box-layer { top: 50%; left: 60%; /* arrow pointing to BOX layer */ }
+  
+.arrow { position: absolute; width: 0; height: 0; border: 20px solid transparent; border-right-color: red; }
+
+
 @keyframes logo-spin {
   from {
     transform: rotate(0deg);
