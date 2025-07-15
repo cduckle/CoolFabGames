@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Edges } from '@react-three/drei';
 import * as THREE from 'three';
-import { mask, pattern } from 'framer-motion/client';
 import { MOSFET_GOAL_RECTS } from './mosfetGoal.js';
 import Confetti from 'react-confetti';
 
